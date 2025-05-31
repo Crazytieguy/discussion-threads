@@ -8,4 +8,19 @@ export default defineSchema({
     clerkId: v.string(),
     name: v.string(),
   }).index("by_clerkId", ["clerkId"]),
+  
+  posts: defineTable({
+    title: v.string(),
+    content: v.string(),
+    authorId: v.id("users"),
+  }),
+  
+  comments: defineTable({
+    content: v.string(),
+    authorId: v.id("users"),
+    postId: v.optional(v.id("posts")),
+    parentCommentId: v.optional(v.id("comments")),
+  })
+    .index("by_post", ["postId"])
+    .index("by_parent_comment", ["parentCommentId"]),
 });
