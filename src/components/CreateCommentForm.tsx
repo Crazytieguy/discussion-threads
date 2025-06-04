@@ -43,7 +43,7 @@ export function CreateCommentForm({ postId, parentCommentId, onSuccess }: Create
         onSubmit={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          form.handleSubmit();
+          void form.handleSubmit();
         }}
         className="space-y-3"
       >

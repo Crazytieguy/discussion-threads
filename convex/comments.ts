@@ -1,6 +1,6 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { query, mutation } from "./_generated/server";
-import { ConvexError } from "convex/values";
+import { Doc } from "./_generated/dataModel";
 
 export const listByPost = query({
   args: {
@@ -50,6 +50,42 @@ export const listByParentComment = query({
   },
 });
 
+export const listWithReplies = query({
+  args: {
+    postId: v.id("posts"),
+  },
+  handler: async (ctx, { postId }) => {
+    // Get top-level comments (direct replies to the post)
+    const topLevelComments = await ctx.db
+      .query("comments")
+      .withIndex("by_post", (q) => q.eq("postId", postId))
+      .collect();
+
+    // Recursively build comment tree
+    const buildCommentTree = async (comment: Doc<"comments">): Promise<any> => {
+      const author: Doc<"users"> | null = await ctx.db.get(comment.authorId);
+      const replies = await ctx.db
+        .query("comments")
+        .withIndex("by_parent_comment", (q) => q.eq("parentCommentId", comment._id))
+        .collect();
+
+      const repliesWithNesting = await Promise.all(
+        replies.map((reply) => buildCommentTree(reply))
+      );
+
+      return {
+        ...comment,
+        author: author ? { name: author.name } : { name: "Unknown" },
+        replies: repliesWithNesting,
+      };
+    };
+
+    return await Promise.all(
+      topLevelComments.map(comment => buildCommentTree(comment))
+    );
+  },
+});
+
 export const create = mutation({
   args: {
     content: v.string(),
@@ -82,6 +118,10 @@ export const create = mutation({
       const parentComment = await ctx.db.get(parentCommentId);
       if (!parentComment) {
         throw new ConvexError("Parent comment not found");
+      }
+      // For replies, inherit the postId from the parent comment's root
+      if (!postId) {
+        postId = parentComment.postId;
       }
     }
 
